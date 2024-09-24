@@ -1,7 +1,8 @@
 import pandas as pd
 import os
 from joblib import load, dump
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import StandardScaler, MinMaxScaler
+import category_encoders as ce
 
 def pop_target(df, target_col):
     """Extract target variable from dataframe
@@ -21,12 +22,287 @@ def pop_target(df, target_col):
         Subsetted Pandas dataframe containing the target
     """
 
-    df_copy = df.copy()
-    target = df_copy.pop(target_col)
+    y = df.pop(target_col)
+    x = df
 
-    return df_copy, target
+    return x, y
+
+def convert_to_datetime(df, col):  
+    """
+    Convert a column to pandas datetime datatype
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Dataframe
+    col : str
+        Name of the column to be converted
+
+    Returns
+    -------
+    pd.DataFrame
+        Dataframe with the target column converted to datetime
+    """
+
+    df[col] = pd.to_datetime(df[col])
+
+    return df
+
+def year_month_weekend(df, date_col, year='year', month='month', is_weekend='is_weekend'):
+    """
+    Extract new 'year', 'month', 'is_weekend' columns for a df from a given datetime column.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Dataframe
+    date_col : str
+        Name of the datetime column
+    year : str
+        Name of the year column to be created. Default 'year'
+    month : str
+        Name of the month column to be created. Default 'month'
+    is_weekend : str
+        Name of the is_weekend column to be created. Default 'is_weekend'
+
+    Returns
+    -------
+    pd.DataFrame
+        Dataframe with the newly created columns
+    """
+    
+    # Extract year
+    df[year] = df[date_col].dt.year
+
+    # Extract month
+    df[month] = df[date_col].dt.month
+
+    # Extract whether the date is a weekday (Saturday=5, Sunday=6)
+    df[is_weekend] = df[date_col].dt.weekday >= 5
+
+    return df
+
+def join_dfs(df_1, df_2, col, how):
+    """
+    Join two dataframes based on desired conditions
+
+    Parameters
+    ----------
+    df_1 : pd.DataFrame
+        Dataframe 1 
+    df_2 : pd.DataFrame
+        Dataframe 2
+    col : str or list
+        Name(s) of the column to join the dfs on
+    how : str
+        Type of the join
+
+    Returns
+    -------
+    pd.DataFrame
+        New joined dataframe
+    """
+
+    new_df = df_1.merge(df_2, on=col, how=how)
+
+    return new_df
+
+def melt_df(df, cols_to_keep, col_name_melted, col_name_value):
+    """
+    Join two dataframes based on desired conditions
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Dataframe to melt 
+    cols_to_keep : list
+        List of columns to keep
+    col_name_melted : str
+        New column name of the melted columns
+    col_name_value : str
+        New column name of the melted values.
+
+    Returns
+    -------
+    pd.DataFrame
+        New joined dataframe
+    """
+
+    new_df = df.melt(id_vars=cols_to_keep, var_name=col_name_melted, value_name=col_name_value)
+
+    return new_df
+
+def create_region(column):
+    """
+    Creates a new column for states.
+
+    Parameters
+    ----------
+    col : str
+        Name of the column to extract the new columns from
+
+    Returns
+    -------
+    str
+        Encoded state id's based on stores.
+    """
+
+    if column.startswith('CA'):
+        return 'CA'
+    elif column.startswith('TX'):
+        return 'TX'
+    elif column.startswith('WI'):
+        return 'WI'
+    else:
+        return None
+    
+def assign_region(df, base_col, new_col='state'):
+    """
+    Assign create region function based on a reference column and creates the new state colum.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Df in question
+    base_col : str
+        Existing column on which the new column shall be extracted.
+    new_col : str
+        Name of the new column. Default: 'state'
+
+    Returns
+    -------
+    pd.DataFrame
+        New dataframe with created state column
+    """
+
+    df[new_col] = df[base_col].apply(create_region)
+
+    return df
+
+def create_revenue(df, new_col='revenue', col1='sold_amount', col2='sell_price'):
+    """
+    Create new revenue column by multiplying two columns amount and sell_price
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Df in question
+    new_col : str
+        New column name to be created. Default: revenue
+    col1 : str
+        Name of the first column for multiplication. Default: 'sold_amount'
+    col2 : str
+        Name of the second column for multiplication. Default: 'sell_price'
+
+    Returns
+    -------
+    pd.DataFrame
+        New dataframe with created state column
+    """
+
+    df[new_col] = df[col1] * df[col2]
+
+    return df
+
+def BaseNencoder(X_train, X_val, cols, base=10):
+    """
+    Apply BaseN Encoder to train and validation sets.
+
+    Parameters
+    ----------
+    X_train : pd.DataFrame
+        X_train
+    X_val : pd.DataFrame
+        X_val
+    cols : list
+        List of the columns to be encoded 
+    Base : int
+        Integer value of number of bases. Default: 10
+
+    Returns
+    -------
+    X_train : pd.DataFrame
+        Encoded X_train
+    X_val : pd.DataFrame
+        Encoded X_val
+    encoder : model
+        Fit and trained BaseN transformer
+    """
+
+    encoder = ce.BaseNEncoder(cols=cols, base=base)
+
+    # Fit and transform X_train
+    X_train = encoder.fit_transform(X_train)
+
+    # Transform X_val
+    X_val = encoder.transform(X_val)
+
+    return X_train, X_val, encoder
+
+def label_encoder(X_train, X_val, cols):
+    """
+    Apply Label Encoder to train and validation sets.
+
+    Parameters
+    ----------
+    X_train : pd.DataFrame
+        X_train
+    X_val : pd.DataFrame
+        X_val
+    cols : list
+        List of the columns to be encoded.
+
+    Returns
+    -------
+    X_train : pd.DataFrame
+        Encoded X_train
+    X_val : pd.DataFrame
+        Encoded X_val
+    encoder : model
+        Fit and trained BaseN transformer
+    """
+    encoder = ce.OrdinalEncoder(cols=cols)
+
+    # Apply label encoder to train
+    X_train = encoder.fit_transform(X_train)
+
+    # Transform X_val
+    X_val = encoder.transform(X_val)
+
+    return X_train, X_val, encoder
 
 
+
+def apply_MinMax(X_train, X_val):
+    """
+    Apply MinMax Scaler to train and validation sets.
+
+    Parameters
+    ----------
+    X_train : pd.DataFrame
+        X_train
+    X_val : pd.DataFrame
+        X_val
+
+    Returns
+    -------
+    X_train : pd.DataFrame
+        Encoded X_train
+    X_val : pd.DataFrame
+        Encoded X_val
+    scaler : model
+        Fit and trained BaseN transformer
+    """
+    # Instantiate a scaler
+    scaler = MinMaxScaler()
+
+    # Fit transform X_train
+    X_train = scaler.fit_transform(X_train)
+
+    # Transform X_val
+    X_val = scaler.transform(X_val)
+
+    return X_train, X_val, scaler
 
 def load_sets(path='../data/processed/'):
     """Load the different locally save sets
@@ -50,7 +326,7 @@ def load_sets(path='../data/processed/'):
         Features for the testing set
     Numpy Array
         Target for the testing set
-    
+
     Raises
     ------
     FileNotFoundError

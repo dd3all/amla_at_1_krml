@@ -62,3 +62,29 @@ def plot_auroc(y_true, y_proba):
     plt.grid(True)
     plt.show()
 
+
+def print_regression_scores(model_name, y_true, y_preds):
+    """
+    Print the regression metrics ( RMSE and MAE )for the provided data
+
+    Parameters
+    ----------
+    model_name : str
+        Name of the model to be evaluated
+    y_true : Numpy Array
+        Actual target
+    y_preds : Numpy Array
+        Predicted target
+
+    Returns
+    -------
+    Nothing
+    """
+    from sklearn.metrics import mean_absolute_error as mae
+    from sklearn.metrics import root_mean_squared_error as rmse
+
+    print(f"{model_name} RMSE:")
+    print(rmse(y_true, y_preds))
+    print(f"{model_name} MAE:")
+    print(mae(y_true, y_preds))
+
